@@ -1,93 +1,106 @@
-
 #include <stdint.h>
 #include <stdbool.h>
 #include "inc/hw_memmap.h"
-#include "driverlib/debug.h"
-#include "driverlib/gpio.h"
-#include "driverlib/sysctl.h" 
 #include "inc/hw_types.h"
-#include "driverlib/systick.h" 
+#include "driverlib/sysctl.h"
+#include "driverlib/gpio.h"
 
-#define XTAL 16000000 
+int i;
 
-// Definiciones para los LEDS
-#define RED_LED   GPIO_PIN_1
-#define BLUE_LED  GPIO_PIN_2
-#define GREEN_LED GPIO_PIN_3
-#define BUTTON_PIN GPIO_PIN_4 
-//Variables
-volatile uint32_t ui32Loop; 
-volatile bool delayComplete = false; 
-int estado = 0; 
+// Funciones para controlar los LEDs
+void toggleRedLED(uint32_t index, bool state);
+void toggleGreenLED(uint32_t index, bool state);
 
-void setup(void); //Función del setup
+int main(void)
+{
+    // Configura el sistema para 40MHz
+    SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
 
-//funciones
+    // Habilita los periféricos GPIO, los botones y los LEDs
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
 
-//segundo delay2
-void SysTickHandler(void) {
-    delayComplete = true; // Indica que el delay ha sido completado
-}
+    while (!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOD) ||
+           !SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOE) ||
+           !SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOB) ||
+           !SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOA) ||
+           !SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOC)) {}
 
-//delay2
-void delay2(void) {
-    delayComplete = false; // Reiniciar el indicador
-    while (!delayComplete) {
-        // Esperar a que el SysTick complete el delay
-    }
-}
+    // Configura los pines GPIO para los LEDs rojos en PD0, PD1, PD2 y PD3
+    GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3);
 
-//chequear si el boton se presiona
-bool pressed(void) {
-    return GPIOPinRead(GPIO_PORTF_BASE, BUTTON_PIN) == 0; //true 0 si se presiona, false  1 si no
-}
+    // Configura los pines GPIO para los LEDs verdes en PE4, PE5, PB4 y PA5
+    GPIOPinTypeGPIOOutput(GPIO_PORTE_BASE, GPIO_PIN_4 | GPIO_PIN_5);
+    GPIOPinTypeGPIOOutput(GPIO_PORTB_BASE, GPIO_PIN_4);
+    GPIOPinTypeGPIOOutput(GPIO_PORTA_BASE, GPIO_PIN_5);
 
-//delay para los LEDS
-void delay(void) {
-    for(ui32Loop = 0; ui32Loop < 3000000; ui32Loop++) {} // Simple delay
-}
+    // Configura los pines GPIO para los botones en PC4, PC5, PC6 y PC7
+    GPIOPinTypeGPIOInput(GPIO_PORTC_BASE, GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7);
+    GPIOPadConfigSet(GPIO_PORTC_BASE, GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
 
-void setup(void){
-   
-    SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL |SYSCTL_XTAL_16MHZ| SYSCTL_OSC_MAIN);
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF); //habilita gpio para los leds
-    while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOF)); //Esperar a que se inicialice
-    GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, RED_LED | BLUE_LED | GREEN_LED); // definir leds como salidas
-    GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, BUTTON_PIN); //configurar el pin como entrada para el boton SW1
-    GPIOPadConfigSet(GPIO_PORTF_BASE, BUTTON_PIN, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
-    SysTickPeriodSet(SysCtlClockGet());
-    SysTickIntRegister(&SysTickHandler); // Registrar la función del manejador
-    SysTickIntEnable();
-    SysTickEnable();
-}
+    // Inicialmente, todos los LEDs verdes están encendidos
+    toggleGreenLED(0, true);
+    toggleGreenLED(1, true);
+    toggleGreenLED(2, true);
+    toggleGreenLED(3, true);
 
-int main(void){
-    setup(); //Llamar al setup
-    //loop principal
-    while(1) {
-        if(pressed()) {//recibe true, low del botn
-            delay(); // delay para debounce
-            while(!pressed()) {} // Esperar hasta que se suelte el botón para ejecutar, boton no est presionado
+    // Variables para controlar el estado de los botones
+    bool buttonState[4] = {true, true, true, true}; // Inicialmente, todos los botones están en estado soltado
 
-            GPIOPinWrite(GPIO_PORTF_BASE, RED_LED | BLUE_LED | GREEN_LED, GREEN_LED);
-            delay();
-
-            GPIOPinWrite(GPIO_PORTF_BASE, RED_LED | BLUE_LED | GREEN_LED, 0);//apaga
-            delay();
-            GPIOPinWrite(GPIO_PORTF_BASE, RED_LED | BLUE_LED | GREEN_LED, GREEN_LED);//enciende
-            delay();
-            GPIOPinWrite(GPIO_PORTF_BASE, RED_LED | BLUE_LED | GREEN_LED, 0);//apaga
-            delay();
-
-
-            GPIOPinWrite(GPIO_PORTF_BASE, RED_LED | BLUE_LED | GREEN_LED, RED_LED | GREEN_LED);
-            delay();
-
-            GPIOPinWrite(GPIO_PORTF_BASE, RED_LED | BLUE_LED | GREEN_LED, RED_LED);
-            delay();
-
-                while(!pressed()) {}
+    while (1)
+    {
+        // Evalúa el estado de los botones y controla los LEDs de forma independiente
+        for (i = 0; i < 4; i++)
+        {
+            bool isPressed = GPIOPinRead(GPIO_PORTC_BASE, 1 << (i + 4)) == 0;
+            if (isPressed && buttonState[i])
+            {
+                // Botón presionado
+                buttonState[i] = false;
+                toggleRedLED(i, true);
+                toggleGreenLED(i, false);
+            }
+            else if (!isPressed && !buttonState[i])
+            {
+                // Botón soltado
+                buttonState[i] = true;
+                toggleRedLED(i, false);
+                toggleGreenLED(i, true);
+            }
         }
     }
 }
 
+// Función para controlar los LEDs rojos
+void toggleRedLED(uint32_t index, bool state)
+{
+    if (state)
+        GPIOPinWrite(GPIO_PORTD_BASE, 1 << index, 1 << index); // Enciende el LED rojo correspondiente
+    else
+        GPIOPinWrite(GPIO_PORTD_BASE, 1 << index, 0); // Apaga el LED rojo correspondiente
+}
+
+// Función para controlar los LEDs verdes
+void toggleGreenLED(uint32_t index, bool state)
+{
+    switch (index)
+    {
+        case 0:
+            GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_4, state ? GPIO_PIN_4 : 0);
+            break;
+        case 1:
+            GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_5, state ? GPIO_PIN_5 : 0);
+            break;
+        case 2:
+            GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_4, state ? GPIO_PIN_4 : 0);
+            break;
+        case 3:
+            GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_5, state ? GPIO_PIN_5 : 0);
+            break;
+        default:
+            break;
+    }
+}
